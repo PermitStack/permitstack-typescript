@@ -1,0 +1,34 @@
+{
+  "name": "permitstack",
+  "version": "1.0.0",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "permits",
+    "building-permits",
+    "api",
+    "construction",
+    "permitstack"
+  ],
+  "author": "",
+  "license": "Apache-2.0",
+  "description": "Official TypeScript SDK for the PermitStack building permit data API",
+  "types": "dist/main.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "openapi-typescript-codegen": "^0.30.0",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PermitStack/permitstack-typescript.git"
+  },
+  "homepage": "https://permit-stack.com"
+}
