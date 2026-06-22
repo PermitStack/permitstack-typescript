@@ -1,5 +1,5 @@
 {
-  "name": "permitstack",
+  "name": "permitstack-sdk",
   "version": "1.0.1",
   "main": "dist/main.js",
   "scripts": {
