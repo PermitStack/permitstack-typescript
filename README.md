@@ -1,6 +1,6 @@
 # permitstack-sdk
 
-Official TypeScript / JavaScript SDK for the [PermitStack](https://permit-stack.com) building‑permit API — **102M+ U.S. building permits across 10,000+ cities in 48 states and DC**, updated daily from official open‑data portals (Socrata, ArcGIS, Tyler EnerGov, Accela, and more).
+Official TypeScript / JavaScript SDK for the [PermitStack](https://permit-stack.com) building‑permit API — **108M+ U.S. building permits across 10,000+ cities in 48 states and DC**, updated daily from official open‑data portals (Socrata, ArcGIS, Tyler EnerGov, Accela, and more).
 
 ## Install
 
