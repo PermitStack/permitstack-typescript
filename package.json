@@ -13,7 +13,7 @@
     "construction",
     "permitstack"
   ],
-  "author": "",
+  "author": "PermitStack <support@permit-stack.com>",
   "license": "Apache-2.0",
   "description": "Official TypeScript SDK for the PermitStack building permit data API",
   "types": "dist/main.d.ts",
@@ -30,5 +30,8 @@
     "type": "git",
     "url": "git+https://github.com/PermitStack/permitstack-typescript.git"
   },
-  "homepage": "https://permit-stack.com"
+  "homepage": "https://permit-stack.com",
+  "bugs": {
+    "url": "https://github.com/PermitStack/permitstack-typescript/issues"
+  }
 }
