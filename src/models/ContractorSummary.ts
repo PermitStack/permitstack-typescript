@@ -13,5 +13,7 @@ export type ContractorSummary = {
     first_permit_date: (string | null);
     last_permit_date: (string | null);
     specialties: (Array<string> | null);
+    score?: (number | null);
+    is_business?: (boolean | null);
 };
 

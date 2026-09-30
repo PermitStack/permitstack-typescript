@@ -8,5 +8,6 @@ export type ContractorSearchResponse = {
     page: number;
     per_page: number;
     results: Array<ContractorSummary>;
+    specialties_matched?: (Array<string> | null);
 };
 

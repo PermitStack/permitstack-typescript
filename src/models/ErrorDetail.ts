@@ -2,8 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type PortalVerifyRequest = {
-    email: string;
-    code: string;
+export type ErrorDetail = {
+    detail?: string;
 };
 

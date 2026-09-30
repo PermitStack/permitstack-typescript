@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "PermitStack",
-    "description": "\n## PermitStack Building Permit API\n\nAccess 93M+ building permits across 8,000+ U.S. cities in 48 states and DC (761 active data sources including counties and statewide feeds, plus 73 historical archives), updated daily from official open data portals.\n\n### Getting started\n1. Sign up at [permit-stack.com](https://permit-stack.com/#pricing) for a free API key (100 req/day)\n2. Pass your key as `X-API-Key` header on every request\n3. See the `/v1/permits/search` endpoint to get started\n\n### Rate limits\nTier       | Requests/min | Requests/day\n-----------|--------------|-------------\nFree       | 30           | 100\nIndie      | 30           | 1,000\nHobbyist   | 30           | 2,500\nDeveloper  | 60           | 10,000\nBusiness   | 200          | 100,000\n\nFree keys cover the last 30 days of permits; every paid tier has full historical access.\nHigher volume or custom terms: support@permit-stack.com\n\n### Support\nsupport@permit-stack.com\n",
+    "description": "\n## PermitStack Building Permit API\n\nAccess 110M+ building permits across 8,000+ U.S. cities in 48 states and DC (810 active data sources including counties and statewide feeds, plus 75 historical archives), drawn from official city and county permit systems and open-data portals and re-ingested nightly for most sources.\n\n### Getting started\n1. Sign up at [permit-stack.com](https://permit-stack.com/#pricing) for a free API key (100 req/day)\n2. Pass your key as `X-API-Key` header on every request\n3. See the `/v1/permits/search` endpoint to get started\n\n### Rate limits\nTier       | Requests/min | Requests/day\n-----------|--------------|-------------\nFree       | 30           | 100\nIndie      | 30           | 1,000\nHobbyist   | 30           | 2,500\nDeveloper  | 60           | 10,000\nBusiness   | 200          | 100,000\nScale      | 500          | 500,000\n\nFree keys cover the last 30 days of permits; every paid tier has full historical access.\nHigher volume or custom terms: support@permit-stack.com\n\n### Support\nsupport@permit-stack.com\n",
     "termsOfService": "https://permit-stack.com/terms.html",
     "contact": {
       "name": "PermitStack Support",
@@ -67,6 +67,7 @@
           "Permits"
         ],
         "summary": "Search Permits",
+        "description": "Search building permits by location, date, category, contractor and more.\n\nFilters combine with AND. Supply at least one narrowing filter -- a city, ZIP,\njurisdiction, date range or lat/lng radius -- for a query that returns quickly.\n\nResults are paginated and ordered newest-first on the permit's best available date\n(`date_issued`, falling back to `date_filed`). `total` is exact up to 10,000; beyond\nthat it stops counting and returns `total: 10000` with `total_capped: true`, meaning\n\"10,000 or more\". If the count cannot finish in time the response carries\n`total: null` with `total_unknown: true` -- an unknown total is reported as unknown\nand never as a number. Rows are unaffected either way; page through them normally.\n\n`category=hvac` matches HVAC and MECHANICAL together, because AC and furnace work is\nfiled under either depending on the city. Unknown parameter names are rejected with a\n400 rather than ignored, so a typo can never silently return unfiltered results.\n\nFree-tier keys are limited to a recent window; paid tiers have full history.",
         "operationId": "search_permits",
         "security": [
           {
@@ -212,6 +213,18 @@
               "title": "Radius Miles"
             },
             "description": "Radius in miles (used with lat/lng)"
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "'summary' (default) or 'full'. With 'full' each result is a PermitDetail rather than a PermitSummary -- the same nine extra columns GET /v1/permits/{id} returns (record_kind, date_expired, fee_amount, stories, units, square_footage, applicant_name, contractor_license, created_at) -- so you do not fetch them one permit at a time. See the PermitDetail schema for their types; the declared response schema here is PermitSummary, which is the default shape. Developer plan and above.",
+              "default": "summary",
+              "title": "Fields"
+            },
+            "description": "'summary' (default) or 'full'. With 'full' each result is a PermitDetail rather than a PermitSummary -- the same nine extra columns GET /v1/permits/{id} returns (record_kind, date_expired, fee_amount, stories, units, square_footage, applicant_name, contractor_license, created_at) -- so you do not fetch them one permit at a time. See the PermitDetail schema for their types; the declared response schema here is PermitSummary, which is the default shape. Developer plan and above."
           },
           {
             "name": "bbox",
@@ -604,10 +617,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Case-insensitive substring match across description, address, and permit number",
+              "description": "Case-insensitive substring match across description, address, and permit number. Terms under 3 characters are matched but not counted: `total` is null with total_unknown=true (a 1-2 character term has no trigram index and the count would cost tens of seconds).",
               "title": "Q"
             },
-            "description": "Case-insensitive substring match across description, address, and permit number"
+            "description": "Case-insensitive substring match across description, address, and permit number. Terms under 3 characters are matched but not counted: `total` is null with total_unknown=true (a 1-2 character term has no trigram index and the count would cost tens of seconds)."
           },
           {
             "name": "contractor_name",
@@ -644,6 +657,24 @@
               "title": "Owner Filed"
             },
             "description": "true = owner-filed permits only (no contractor on record but an owner name is present \u2014 often a DIY/homeowner lead, though for feeds that don't capture contractors the owner may be a builder or institution); false = permits that have a contractor"
+          },
+          {
+            "name": "has_owner_address",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = only permits that carry a property-owner mailing address; false = only those that do not. Coverage varies sharply by jurisdiction (we hold the county assessor roll for some and not others), so this is a targeting filter rather than a defect: it returns exactly the rows that are actionable. The address itself is visible on Business and above.",
+              "title": "Has Owner Address"
+            },
+            "description": "true = only permits that carry a property-owner mailing address; false = only those that do not. Coverage varies sharply by jurisdiction (we hold the county assessor roll for some and not others), so this is a targeting filter rather than a defect: it returns exactly the rows that are actionable. The address itself is visible on Business and above."
           },
           {
             "name": "page",
@@ -793,6 +824,18 @@
             },
             "description": "Alias of `per_page`. Clamped to your plan's maximum, not rejected.",
             "deprecated": true
+          },
+          {
+            "name": "count_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Return only the total for these filters -- no permit records. Skips the row fetch entirely, so it is markedly cheaper for both of us when you are sizing a query rather than reading it. `results` comes back empty and `total_capped` / `total_unknown` mean exactly what they always do.",
+              "default": false,
+              "title": "Count Only"
+            },
+            "description": "Return only the total for these filters -- no permit records. Skips the row fetch entirely, so it is markedly cheaper for both of us when you are sizing a query rather than reading it. `results` comes back empty and `total_capped` / `total_unknown` mean exactly what they always do."
           }
         ],
         "responses": {
@@ -812,6 +855,51 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your plan does not include this endpoint, or an option you passed. The body is machine-readable: `error` is `feature_locked`, `feature` names the gate, `upgrade_url` links to the cheapest plan that unlocks it, and `current_tier` is the plan you are on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureLocked"
+                },
+                "example": {
+                  "detail": {
+                    "error": "feature_locked",
+                    "feature": "full_fields",
+                    "message": "fields=full is available on Developer ($79/mo) and above.",
+                    "upgrade_url": "https://permit-stack.com/?plan=developer&feature=full_fields#pricing",
+                    "current_tier": "Indie"
+                  }
                 }
               }
             }
@@ -1242,6 +1330,24 @@
             "description": "true = owner-filed permits only (no contractor on record, owner name present \u2014 often DIY/homeowner leads, though for feeds without contractor capture the owner may be a builder/institution); false = permits that have a contractor"
           },
           {
+            "name": "jurisdiction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A jurisdiction's id (from /v1/jurisdictions) or its name, partial and case-insensitive -- the same matching as /v1/permits/search. Lets a full load be partitioned along the coverage list.",
+              "title": "Jurisdiction"
+            },
+            "description": "A jurisdiction's id (from /v1/jurisdictions) or its name, partial and case-insensitive -- the same matching as /v1/permits/search. Lets a full load be partitioned along the coverage list."
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -1249,9 +1355,11 @@
               "type": "integer",
               "maximum": 1000000,
               "minimum": 1,
+              "description": "Rows to return, up to your plan's export maximum (a larger value is refused with 403, never silently lowered). If more rows match than `limit`, the response header X-Permitstack-Truncated is `true`: narrow the filter or split the date range and export again.",
               "default": 1000,
               "title": "Limit"
-            }
+            },
+            "description": "Rows to return, up to your plan's export maximum (a larger value is refused with 403, never silently lowered). If more rows match than `limit`, the response header X-Permitstack-Truncated is `true`: narrow the filter or split the date range and export again."
           },
           {
             "name": "keyword",
@@ -1362,8 +1470,10 @@
           "200": {
             "description": "Successful Response",
             "content": {
-              "application/json": {
-                "schema": {}
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -1373,6 +1483,51 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your plan does not include this endpoint, or an option you passed. The body is machine-readable: `error` is `feature_locked`, `feature` names the gate, `upgrade_url` links to the cheapest plan that unlocks it, and `current_tier` is the plan you are on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureLocked"
+                },
+                "example": {
+                  "detail": {
+                    "error": "feature_locked",
+                    "feature": "full_fields",
+                    "message": "fields=full is available on Developer ($79/mo) and above.",
+                    "upgrade_url": "https://permit-stack.com/?plan=developer&feature=full_fields#pricing",
+                    "current_tier": "Indie"
+                  }
                 }
               }
             }
@@ -1491,14 +1646,57 @@
               "title": "Category"
             },
             "description": "Optional category filter (e.g. solar, roofing)."
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "'summary' (default) or 'full'. 'full' adds record_kind, date_expired, fee_amount, stories, units, square_footage, applicant_name, contractor_license and created_at to every record, so a mirror does not have to fetch them one permit at a time. OPT-IN: the default payload is unchanged apart from `contractor_id`, added on 2026-09-10 to every permit surface; widening a feed under a consumer with a strict schema is otherwise avoided.",
+              "default": "summary",
+              "title": "Fields"
+            },
+            "description": "'summary' (default) or 'full'. 'full' adds record_kind, date_expired, fee_amount, stories, units, square_footage, applicant_name, contractor_license and created_at to every record, so a mirror does not have to fetch them one permit at a time. OPT-IN: the default payload is unchanged apart from `contractor_id`, added on 2026-09-10 to every permit surface; widening a feed under a consumer with a strict schema is otherwise avoided."
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "A page of permits in (updated_at, id) order. Keep `next_cursor` and pass it back as `cursor` to resume; `has_more` is false once you are caught up. Each record in `results` has the /v1/permits/search fields (fields=summary) plus the extras listed under `fields=full`. Page size is `limit`, up to 50,000.",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {},
+                "example": {
+                  "results": [
+                    {
+                      "id": "0f6a8f3e-5b1d-4d53-9d0e-2f1b5c8a7e21",
+                      "permit_number": "BP-2026-01234",
+                      "status": "ISSUED",
+                      "category": "ROOFING",
+                      "tags": [
+                        "roofing"
+                      ],
+                      "property_type": "COMMERCIAL",
+                      "address_street": "100 MAIN ST",
+                      "address_city": "AUSTIN",
+                      "address_state": "TX",
+                      "address_zip": "78701",
+                      "parcel_id": "0201010101",
+                      "description_raw": "Re-roof, 12,000 sq ft TPO",
+                      "estimated_value": 185000.0,
+                      "date_filed": "2026-09-01",
+                      "date_issued": "2026-09-10",
+                      "contractor_name": "ACME ROOFING LLC",
+                      "contractor_id": "6c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f",
+                      "jurisdiction_name": "Austin",
+                      "latitude": 30.2672,
+                      "longitude": -97.7431
+                    }
+                  ],
+                  "count": 1,
+                  "has_more": true,
+                  "next_cursor": "2026-09-30T03:08:28.999929+00:00|0f6a8f3e-5b1d-4d53-9d0e-2f1b5c8a7e21"
+                }
               }
             }
           },
@@ -1508,6 +1706,51 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your plan does not include this endpoint, or an option you passed. The body is machine-readable: `error` is `feature_locked`, `feature` names the gate, `upgrade_url` links to the cheapest plan that unlocks it, and `current_tier` is the plan you are on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureLocked"
+                },
+                "example": {
+                  "detail": {
+                    "error": "feature_locked",
+                    "feature": "full_fields",
+                    "message": "fields=full is available on Developer ($79/mo) and above.",
+                    "upgrade_url": "https://permit-stack.com/?plan=developer&feature=full_fields#pricing",
+                    "current_tier": "Indie"
+                  }
                 }
               }
             }
@@ -1521,7 +1764,7 @@
           "Permits"
         ],
         "summary": "List Permit Events",
-        "description": "Queryable feed of permit status/date transitions (new_permit, status_change,\nissued, completed, expired), built from a daily-ingest diff. A real-time,\nhistorical, filter-scoped change feed no competitor offers below enterprise \u2014\npair it with a webhook to be alerted the moment a matching permit changes status.",
+        "description": "What CHANGED, instead of re-reading everything: permit transitions\n(new_permit, status_change, issued, completed, expired) built from the daily\ningest diff, filterable by city, state, category and jurisdiction.\n\n**This is the endpoint to poll on a schedule, and `cursor` is how to poll it.**\nSave the `next_cursor` from each response and pass it back as `cursor` on the\nnext call; you then receive only what you have not already seen, in the order it\nwas detected, with no duplicates and no gap. Page until a response comes back\nshorter than `per_page`, save that last `next_cursor`, and resume there tomorrow.\n\n**WHERE YOU START MATTERS, AND THE FIRST CALL DOES NOT START AT THE BEGINNING.**\nA call with NO cursor returns the NEWEST events and its `next_cursor` is the\nfrontier -- a watermark at \"now\". Pass it straight back and you correctly get 0\nresults, because you have just declared yourself caught up. That is exactly what\na poller wants: from here on you receive everything new. It is NOT a backfill,\nand it will not walk history for you -- there are 75,544 events behind that\nwatermark for the Tampa filter below alone.\n\nTo start somewhere else, build the cursor yourself: it is\n`<ISO-8601 timestamp>|<event id>`, and `|0` is a valid id floor.\n\n    # start polling from now (typical):\n    GET /v1/permits/events?city=Tampa&state=FL&category=roofing\n        &event_type=new_permit                       -> save next_cursor\n    # ...then, from the next call onward:\n    GET ...&cursor=2026-09-08T04%3A09%3A16.381111%2B00%3A00%7C51823904\n\n    # start from a chosen point instead (backfill the last 30 days, then keep polling):\n    GET ...&cursor=2026-08-11T00%3A00%3A00%2B00%3A00%7C0\n\nOne call answers what a paged re-pull of /v1/permits/search costs hundreds of.\nMeasured 2026-09-09, that Tampa query returns **38 records in a single call**;\nthe same question asked by re-pulling search pages 1-100 twelve times a day\ncosts ~9,600 requests and runs into the daily cap.\n\n`detected_after` still works and is fine for an ad-hoc look at a window, but it\nis the wrong tool for a poller: it is INCLUSIVE, and one ingest batch stamps\nthousands of events with a single identical `detected_at` (measured 2026-09-10:\n3,688 timestamps carry over 1,000 events each, the largest 1,370,561). A poller\nthat stores the newest `detected_at` and passes it back therefore re-receives\nthat whole batch every time. `cursor` breaks the tie on the event id and does not.\n\nSupplying a `cursor` returns events oldest-unseen first, which is what lets a\nbatch be paged safely; without one you get the newest first, for browsing.\n`cursor` and `page` are alternatives -- passing both is a 400 rather than a\nsilently skipped page.\n\nIngest runs once a day, so a daily poll is enough; `detected_at` is when WE saw\nthe change, not when the city recorded it. For push instead of poll, register a\nwebhook (developer tier and above) and skip the polling entirely.",
         "operationId": "list_permit_events",
         "security": [
           {
@@ -1542,10 +1785,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by event type: new_permit, status_change, issued, completed, expired",
+              "description": "Filter by event type: new_permit, status_change, issued, completed, expired (the permit's expiration date has passed without it being finished; emitted when that date arrives)",
               "title": "Event Type"
             },
-            "description": "Filter by event type: new_permit, status_change, issued, completed, expired"
+            "description": "Filter by event type: new_permit, status_change, issued, completed, expired (the permit's expiration date has passed without it being finished; emitted when that date arrives)"
           },
           {
             "name": "category",
@@ -1652,10 +1895,28 @@
                   "type": "null"
                 }
               ],
-              "description": "Only events detected on/after this UTC timestamp (ISO 8601)",
+              "description": "Only events detected on/after this UTC timestamp (ISO 8601). Inclusive, so a batch sharing one timestamp is re-delivered; prefer `cursor` for polling.",
               "title": "Detected After"
             },
-            "description": "Only events detected on/after this UTC timestamp (ISO 8601)"
+            "description": "Only events detected on/after this UTC timestamp (ISO 8601). Inclusive, so a batch sharing one timestamp is re-delivered; prefer `cursor` for polling."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor from the previous response's `next_cursor`. Resumes exactly where you stopped, with no duplicates and no gap. Omit on the first call.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor from the previous response's `next_cursor`. Resumes exactly where you stopped, with no duplicates and no gap. Omit on the first call."
           },
           {
             "name": "page",
@@ -1679,6 +1940,27 @@
               "default": 50,
               "title": "Per Page"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Alias of `per_page`. Clamped to 100, not rejected.",
+              "deprecated": true,
+              "title": "Limit"
+            },
+            "description": "Alias of `per_page`. Clamped to 100, not rejected.",
+            "deprecated": true
           }
         ],
         "responses": {
@@ -1698,6 +1980,32 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
                 }
               }
             }
@@ -1750,6 +2058,32 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
           }
         }
       }
@@ -1799,6 +2133,18 @@
               "default": 25,
               "title": "Per Page"
             }
+          },
+          {
+            "name": "record_kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "'permit' (default), a specific record_kind, or 'all'.",
+              "default": "permit",
+              "title": "Record Kind"
+            },
+            "description": "'permit' (default), a specific record_kind, or 'all'."
           }
         ],
         "responses": {
@@ -1821,6 +2167,32 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
           }
         }
       }
@@ -1831,7 +2203,7 @@
           "Permits"
         ],
         "summary": "Get Coverage Stats",
-        "description": "Get coverage statistics \u2014 total permits, jurisdictions, and breakdown by city.",
+        "description": "Coverage statistics: total permits, every jurisdiction we hold, and the counties they fall in.\n\nEach jurisdiction carries `data_through` (the newest permit we actually hold, measured),\nplus `county` / `county_fips` (the county most of its permits fall in) and `counties`\n(the full measured mix with a `share` of the sample per county, since some cities straddle\na county line). `counties` at the top level is the same data keyed by county, listing the\njurisdictions whose permits fall in each one. A null county means not measured, which is\nthe case for statewide feeds that publish no coordinates.",
         "operationId": "get_coverage_stats",
         "responses": {
           "200": {
@@ -1839,6 +2211,32 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
               }
             }
           }
@@ -1864,6 +2262,32 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
               }
             }
           }
@@ -2056,6 +2480,51 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your plan does not include this endpoint, or an option you passed. The body is machine-readable: `error` is `feature_locked`, `feature` names the gate, `upgrade_url` links to the cheapest plan that unlocks it, and `current_tier` is the plan you are on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureLocked"
+                },
+                "example": {
+                  "detail": {
+                    "error": "feature_locked",
+                    "feature": "full_fields",
+                    "message": "fields=full is available on Developer ($79/mo) and above.",
+                    "upgrade_url": "https://permit-stack.com/?plan=developer&feature=full_fields#pricing",
+                    "current_tier": "Indie"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -2215,6 +2684,51 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your plan does not include this endpoint, or an option you passed. The body is machine-readable: `error` is `feature_locked`, `feature` names the gate, `upgrade_url` links to the cheapest plan that unlocks it, and `current_tier` is the plan you are on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureLocked"
+                },
+                "example": {
+                  "detail": {
+                    "error": "feature_locked",
+                    "feature": "full_fields",
+                    "message": "fields=full is available on Developer ($79/mo) and above.",
+                    "upgrade_url": "https://permit-stack.com/?plan=developer&feature=full_fields#pricing",
+                    "current_tier": "Indie"
+                  }
                 }
               }
             }
@@ -2380,6 +2894,51 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your plan does not include this endpoint, or an option you passed. The body is machine-readable: `error` is `feature_locked`, `feature` names the gate, `upgrade_url` links to the cheapest plan that unlocks it, and `current_tier` is the plan you are on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureLocked"
+                },
+                "example": {
+                  "detail": {
+                    "error": "feature_locked",
+                    "feature": "full_fields",
+                    "message": "fields=full is available on Developer ($79/mo) and above.",
+                    "upgrade_url": "https://permit-stack.com/?plan=developer&feature=full_fields#pricing",
+                    "current_tier": "Indie"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -2526,6 +3085,51 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your plan does not include this endpoint, or an option you passed. The body is machine-readable: `error` is `feature_locked`, `feature` names the gate, `upgrade_url` links to the cheapest plan that unlocks it, and `current_tier` is the plan you are on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureLocked"
+                },
+                "example": {
+                  "detail": {
+                    "error": "feature_locked",
+                    "feature": "full_fields",
+                    "message": "fields=full is available on Developer ($79/mo) and above.",
+                    "upgrade_url": "https://permit-stack.com/?plan=developer&feature=full_fields#pricing",
+                    "current_tier": "Indie"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -2615,6 +3219,42 @@
               "title": "Specialty"
             },
             "description": "Specialty tag (e.g. solar, roofing, hvac)"
+          },
+          {
+            "name": "license_number",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact state licence number, e.g. 'CBC1262595'. Matched exactly, and also tried uppercased -- so any capitalisation works for the licences stored uppercase, which is 99.96% of them. Combine with license_state when the same number is issued in more than one state.",
+              "title": "License Number"
+            },
+            "description": "Exact state licence number, e.g. 'CBC1262595'. Matched exactly, and also tried uppercased -- so any capitalisation works for the licences stored uppercase, which is 99.96% of them. Combine with license_state when the same number is issued in more than one state."
+          },
+          {
+            "name": "license_state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "2-letter state that ISSUED the licence. Not the same as `state`, which is where the contractor pulls permits.",
+              "title": "License State"
+            },
+            "description": "2-letter state that ISSUED the licence. Not the same as `state`, which is where the contractor pulls permits."
           },
           {
             "name": "min_permits",
@@ -2710,6 +3350,32 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
           }
         }
       }
@@ -2756,6 +3422,32 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
                 }
               }
             }
@@ -2826,6 +3518,32 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
                 }
               }
             }
@@ -2939,6 +3657,26 @@
               "default": 50,
               "title": "Per Page"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 200,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Alias of per_page.",
+              "title": "Limit"
+            },
+            "description": "Alias of per_page."
           }
         ],
         "responses": {
@@ -2958,6 +3696,32 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
                 }
               }
             }
@@ -3033,6 +3797,26 @@
               "default": 50,
               "title": "Per Page"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 200,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Alias of per_page.",
+              "title": "Limit"
+            },
+            "description": "Alias of per_page."
           }
         ],
         "responses": {
@@ -3055,6 +3839,32 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
           }
         }
       }
@@ -3073,6 +3883,32 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
               }
             }
           }
@@ -3115,6 +3951,51 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your plan does not include this endpoint, or an option you passed. The body is machine-readable: `error` is `feature_locked`, `feature` names the gate, `upgrade_url` links to the cheapest plan that unlocks it, and `current_tier` is the plan you are on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureLocked"
+                },
+                "example": {
+                  "detail": {
+                    "error": "feature_locked",
+                    "feature": "full_fields",
+                    "message": "fields=full is available on Developer ($79/mo) and above.",
+                    "upgrade_url": "https://permit-stack.com/?plan=developer&feature=full_fields#pricing",
+                    "current_tier": "Indie"
+                  }
                 }
               }
             }
@@ -3169,6 +4050,113 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Update Webhook",
+        "description": "Re-activate (or deactivate) one of your webhooks.\n\nRe-activating resumes delivery from now: permits ingested while the webhook was paused\nare not replayed (use /v1/permits/search or /v1/permits/sync to backfill a gap), so a\nnewly fixed endpoint is not hit with the whole backlog at once. The failure count resets\nto zero.",
+        "operationId": "update_webhook",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Webhook Id"
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean",
+              "description": "true re-activates a webhook the failure breaker switched off.",
+              "title": "Is Active"
+            },
+            "description": "true re-activates a webhook the failure breaker switched off."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
           }
         }
       }
@@ -3215,6 +4203,190 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/{webhook_id}/deliveries": {
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Get Webhook Deliveries",
+        "description": "Why your webhook is or is not being delivered, seen from our side of the connection.\n\nOnly FAILED attempts are recorded individually; successful deliveries are counted\n(fire_count, last_fired_at). An empty `recent_failures` list is therefore good news, not\nmissing data. `consecutive_failures` is what the automatic pause acts on: when it reaches\nthe limit the webhook is deactivated, so it is the field to watch.",
+        "operationId": "get_webhook_deliveries",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Webhook Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "How many recent failed attempts to return.",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "How many recent failed attempts to return."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/{webhook_id}/rotate-secret": {
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Rotate Webhook Secret",
+        "description": "Issue a NEW signing secret for this webhook. The old one stops working immediately.\n\nEvery delivery after this call is signed with the new secret, so update your verifier\nfirst. Creating a webhook again with the same settings returns the existing secret; this\nendpoint is the only way to rotate it.",
+        "operationId": "rotate_webhook_secret",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Webhook Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
           }
         }
       }
@@ -3258,6 +4430,501 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/jurisdictions": {
+      "get": {
+        "tags": [
+          "Permits"
+        ],
+        "summary": "List Covered Jurisdictions",
+        "description": "Every jurisdiction we cover, with how current and how complete each one is.\n\n`data_through` is the newest permit we actually hold, measured -- not when we last\npolled the source. `freshness_label` and `completeness_label` are the same sentences the\nexport picker and the delivered manifest use, so this can never disagree with them.",
+        "operationId": "list_covered_jurisdictions",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ]
+      }
+    },
+    "/v1/metrics/monthly": {
+      "get": {
+        "tags": [
+          "Metrics",
+          "Metrics"
+        ],
+        "summary": "Metrics Monthly",
+        "description": "Monthly permit counts and total valuation for a city/state/category.\n\nAvailable on the Developer plan and above (see /v1/billing/plans for current pricing).\n\nServed from a nightly rollup, so it answers in milliseconds where the equivalent\nsearch-and-count takes seconds. At least one of `state` or `city` is required: an\nunfiltered national series would be a different (and much larger) product.",
+        "operationId": "metrics_monthly",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 2
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Two-letter state code, e.g. FL",
+              "title": "State"
+            },
+            "description": "Two-letter state code, e.g. FL"
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "City name; case-insensitive",
+              "title": "City"
+            },
+            "description": "City name; case-insensitive"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Permit category, e.g. ROOFING",
+              "title": "Category"
+            },
+            "description": "Permit category, e.g. ROOFING"
+          },
+          {
+            "name": "months",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 120,
+              "minimum": 1,
+              "description": "How many trailing months to return",
+              "default": 24,
+              "title": "Months"
+            },
+            "description": "How many trailing months to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your plan does not include this endpoint, or an option you passed. The body is machine-readable: `error` is `feature_locked`, `feature` names the gate, `upgrade_url` links to the cheapest plan that unlocks it, and `current_tier` is the plan you are on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureLocked"
+                },
+                "example": {
+                  "detail": {
+                    "error": "feature_locked",
+                    "feature": "full_fields",
+                    "message": "fields=full is available on Developer ($79/mo) and above.",
+                    "upgrade_url": "https://permit-stack.com/?plan=developer&feature=full_fields#pricing",
+                    "current_tier": "Indie"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/metrics/current": {
+      "get": {
+        "tags": [
+          "Metrics",
+          "Metrics"
+        ],
+        "summary": "Metrics Current",
+        "description": "Category breakdown over a trailing window \u2014 the 'what is happening here now' view.\n\nAvailable on the Developer plan and above (see /v1/billing/plans for current pricing).",
+        "operationId": "metrics_current",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 2
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "City"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 730,
+              "minimum": 28,
+              "description": "Trailing window. Rounded to whole months by the rollup.",
+              "default": 90,
+              "title": "Days"
+            },
+            "description": "Trailing window. Rounded to whole months by the rollup."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your plan does not include this endpoint, or an option you passed. The body is machine-readable: `error` is `feature_locked`, `feature` names the gate, `upgrade_url` links to the cheapest plan that unlocks it, and `current_tier` is the plan you are on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureLocked"
+                },
+                "example": {
+                  "detail": {
+                    "error": "feature_locked",
+                    "feature": "full_fields",
+                    "message": "fields=full is available on Developer ($79/mo) and above.",
+                    "upgrade_url": "https://permit-stack.com/?plan=developer&feature=full_fields#pricing",
+                    "current_tier": "Indie"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/metrics/cities": {
+      "get": {
+        "tags": [
+          "Metrics",
+          "Metrics"
+        ],
+        "summary": "Metrics Cities",
+        "description": "Busiest cities in a state \u2014 the ranking customers were building by hand.\n\nAvailable on the Developer plan and above (see /v1/billing/plans for current pricing).",
+        "operationId": "metrics_cities",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 2,
+              "title": "State"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "name": "months",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 120,
+              "minimum": 1,
+              "default": 12,
+              "title": "Months"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key. Pass a key as the `X-API-Key` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "example": {
+                  "detail": "Rate limit exceeded: 30 requests per minute"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your plan does not include this endpoint, or an option you passed. The body is machine-readable: `error` is `feature_locked`, `feature` names the gate, `upgrade_url` links to the cheapest plan that unlocks it, and `current_tier` is the plan you are on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureLocked"
+                },
+                "example": {
+                  "detail": {
+                    "error": "feature_locked",
+                    "feature": "full_fields",
+                    "message": "fields=full is available on Developer ($79/mo) and above.",
+                    "upgrade_url": "https://permit-stack.com/?plan=developer&feature=full_fields#pricing",
+                    "current_tier": "Indie"
+                  }
                 }
               }
             }
@@ -3417,6 +5084,42 @@
             ],
             "title": "Email"
           },
+          "contact_locked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Locked"
+          },
+          "locked_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Fields"
+          },
+          "upgrade_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upgrade Url"
+          },
           "address": {
             "anyOf": [
               {
@@ -3504,6 +5207,20 @@
             },
             "type": "array",
             "title": "Results"
+          },
+          "specialties_matched": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Specialties Matched"
           }
         },
         "type": "object",
@@ -3682,6 +5399,28 @@
             ],
             "title": "Data Status"
           },
+          "data_through": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Through"
+          },
+          "freshness": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freshness"
+          },
           "jurisdiction_permit_count": {
             "anyOf": [
               {
@@ -3696,6 +5435,28 @@
           "note": {
             "type": "string",
             "title": "Note"
+          },
+          "tier_window_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier Window Days"
+          },
+          "tier_window_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier Window From"
           }
         },
         "type": "object",
@@ -3719,6 +5480,36 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "Hint": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "docs_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Docs Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "Hint",
+        "description": "Advisory, additive, never an error. Tells a caller that a cheaper endpoint answers\nthe question their request pattern implies."
       },
       "JurisdictionCoverage": {
         "properties": {
@@ -3758,14 +5549,18 @@
           "jurisdiction"
         ],
         "title": "JurisdictionCoverage",
-        "description": "How current one jurisdiction's data is, for the jurisdictions on THIS page of results.\n\nExists because a customer cannot otherwise tell \"this source has published nothing yet for\nthe window you asked about\" apart from \"this data is broken\". On 2026-08-02 a paying\ncustomer searched LA County new construction over a trailing 3 weeks, got 143 real permits\nwith every contractor field blank, and reasonably concluded our contractor data was\nmissing. It was not: LA County publishes about a month behind, and the feed that carries\ncontractors had simply not published that window yet. That cost several days of email."
+        "description": "How current one jurisdiction's data is, for the jurisdictions on THIS page of results.\n\nLets you tell \"this source has not yet published the window you asked about\" apart from\n\"this data is missing\": `data_through` is the newest permit we hold for the jurisdiction,\nand `with_contractor` shows how many rows on this page carry a contractor name."
       },
       "PermitDetail": {
         "properties": {
           "id": {
             "type": "string",
             "format": "uuid",
-            "title": "Id"
+            "title": "Id",
+            "description": "Stable PermitStack id. Pass to GET /v1/permits/{id}.",
+            "examples": [
+              "f4be62ed-b522-42a3-907b-b4ab4ec1a102"
+            ]
           },
           "permit_number": {
             "anyOf": [
@@ -3776,15 +5571,60 @@
                 "type": "null"
               }
             ],
-            "title": "Permit Number"
+            "title": "Permit Number",
+            "description": "The permit number as the issuing jurisdiction publishes it. Not unique across jurisdictions, and not always present.",
+            "examples": [
+              "R2608-181"
+            ]
           },
           "status": {
             "type": "string",
-            "title": "Status"
+            "enum": [
+              "FILED",
+              "ISSUED",
+              "IN_PROGRESS",
+              "FINAL",
+              "EXPIRED",
+              "CANCELLED",
+              "REVOKED",
+              "UNKNOWN",
+              "INTERCONNECTED"
+            ],
+            "title": "Status",
+            "description": "One of FILED, ISSUED, IN_PROGRESS, FINAL, EXPIRED, CANCELLED, REVOKED, INTERCONNECTED, UNKNOWN -- normalised by us from each source's own vocabulary. UNKNOWN means the source published no status, never that the permit is inactive. INTERCONNECTED comes from the California NEM solar feed.",
+            "examples": [
+              "ISSUED"
+            ]
           },
           "category": {
             "type": "string",
-            "title": "Category"
+            "enum": [
+              "NEW_CONSTRUCTION",
+              "RENOVATION",
+              "DEMOLITION",
+              "ELECTRICAL",
+              "PLUMBING",
+              "MECHANICAL",
+              "ROOFING",
+              "SOLAR",
+              "BATTERY",
+              "EV_CHARGER",
+              "HVAC",
+              "FIRE_ALARM",
+              "SIGN",
+              "FENCE",
+              "POOL",
+              "FOUNDATION",
+              "ADDITION",
+              "INTERIOR_REMODEL",
+              "GRADING",
+              "OTHER"
+            ],
+            "title": "Category",
+            "description": "Trade/work classification, UPPERCASE. One of: NEW_CONSTRUCTION, RENOVATION, DEMOLITION, ELECTRICAL, PLUMBING, MECHANICAL, ROOFING, SOLAR, BATTERY, EV_CHARGER, HVAC, FIRE_ALARM, SIGN, FENCE, POOL, FOUNDATION, ADDITION, INTERIOR_REMODEL, GRADING, OTHER. Derived by us from the permit type and description, not published by the city. NOTE when FILTERING: ?category=hvac matches HVAC *and* MECHANICAL, and ?category=mechanical does the same, because HVAC work is routinely filed as MECHANICAL -- they are one market and a bare equality would hide half of it.",
+            "examples": [
+              "ROOFING"
+            ]
           },
           "tags": {
             "anyOf": [
@@ -3798,11 +5638,21 @@
                 "type": "null"
               }
             ],
-            "title": "Tags"
+            "title": "Tags",
+            "description": "Free-form keywords extracted from the description (e.g. 'pool', 'reroof'). Additive; do not rely on a fixed vocabulary.",
+            "examples": [
+              [
+                "pool"
+              ]
+            ]
           },
           "property_type": {
             "type": "string",
-            "title": "Property Type"
+            "title": "Property Type",
+            "description": "RESIDENTIAL, COMMERCIAL, INDUSTRIAL, MIXED_USE or UNKNOWN. UNKNOWN is common -- many feeds publish nothing that implies a property type.",
+            "examples": [
+              "RESIDENTIAL"
+            ]
           },
           "address_street": {
             "anyOf": [
@@ -3813,7 +5663,11 @@
                 "type": "null"
               }
             ],
-            "title": "Address Street"
+            "title": "Address Street",
+            "description": "Street address as published. Stored verbatim, so spacing can be irregular; our address matching normalises whitespace for you.",
+            "examples": [
+              "288 Mosaic Blvd"
+            ]
           },
           "address_city": {
             "anyOf": [
@@ -3824,7 +5678,11 @@
                 "type": "null"
               }
             ],
-            "title": "Address City"
+            "title": "Address City",
+            "description": "City. Null where the feed publishes none -- notably county-wide feeds. Read null as unknown, never as 'not in a city'.",
+            "examples": [
+              "Daytona Beach"
+            ]
           },
           "address_state": {
             "anyOf": [
@@ -3835,7 +5693,11 @@
                 "type": "null"
               }
             ],
-            "title": "Address State"
+            "title": "Address State",
+            "description": "2-letter state. Null on 6.6M permits (7.3%) whose feed never populates it; those rows are still returned by ?state= searches, which admit them on independent evidence of the jurisdiction.",
+            "examples": [
+              "FL"
+            ]
           },
           "address_zip": {
             "anyOf": [
@@ -3846,7 +5708,26 @@
                 "type": "null"
               }
             ],
-            "title": "Address Zip"
+            "title": "Address Zip",
+            "description": "5-digit ZIP where published.",
+            "examples": [
+              "32124"
+            ]
+          },
+          "parcel_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parcel Id",
+            "description": "Assessor parcel number / APN exactly as the SOURCE publishes it -- formatting varies by county and is not normalised. ~41% populated estate-wide and entirely dependent on whether the source publishes one, so read a null as 'this feed does not carry a parcel', never as 'this property has none'. Filterable via ?parcel=.",
+            "examples": [
+              "521804000160"
+            ]
           },
           "description_raw": {
             "anyOf": [
@@ -3857,7 +5738,11 @@
                 "type": "null"
               }
             ],
-            "title": "Description Raw"
+            "title": "Description Raw",
+            "description": "The scope of work exactly as the jurisdiction published it. The single most useful field for lead qualification, and the input our category classifier reads.",
+            "examples": [
+              "RE-ROOF: remove existing shingles, install 39 sq architectural shingles"
+            ]
           },
           "estimated_value": {
             "anyOf": [
@@ -3868,7 +5753,11 @@
                 "type": "null"
               }
             ],
-            "title": "Estimated Value"
+            "title": "Estimated Value",
+            "description": "Declared job value in USD, as published. Frequently null and occasionally nominal -- treat 0 and 1 as 'not stated'.",
+            "examples": [
+              24500.0
+            ]
           },
           "date_filed": {
             "anyOf": [
@@ -3880,7 +5769,11 @@
                 "type": "null"
               }
             ],
-            "title": "Date Filed"
+            "title": "Date Filed",
+            "description": "Application/filing date. Null where the source publishes only an issue date.",
+            "examples": [
+              "2026-08-14"
+            ]
           },
           "date_issued": {
             "anyOf": [
@@ -3892,7 +5785,11 @@
                 "type": "null"
               }
             ],
-            "title": "Date Issued"
+            "title": "Date Issued",
+            "description": "Issue date. Null on ~25% of permits estate-wide -- whole feeds publish only a filed date -- which is why date_after/date_before filter on COALESCE(date_issued, date_filed) and issued_after does not.",
+            "examples": [
+              "2026-08-21"
+            ]
           },
           "date_completed": {
             "anyOf": [
@@ -3904,7 +5801,11 @@
                 "type": "null"
               }
             ],
-            "title": "Date Completed"
+            "title": "Date Completed",
+            "description": "Completion/final date where the source publishes one. Usually null.",
+            "examples": [
+              null
+            ]
           },
           "approval_days": {
             "anyOf": [
@@ -3939,7 +5840,24 @@
                 "type": "null"
               }
             ],
-            "title": "Contractor Name"
+            "title": "Contractor Name",
+            "description": "Contractor of record, cleaned and de-duplicated by us. Null where the feed publishes no contractor -- which is whole jurisdictions, not scattered rows: 45% of permits estate-wide carry one. A page of nulls usually means the source does not publish contractors, not that our data is missing; the `jurisdiction_coverage` block on a search response tells you which.",
+            "examples": [
+              "GLZ Industries LLC"
+            ]
+          },
+          "contractor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contractor Id",
+            "description": "Opaque id of the contractor on this permit. Pass it to GET /v1/contractors/{id} for the full record; null when the source publishes no contractor for this permit."
           },
           "owner_name": {
             "anyOf": [
@@ -3950,7 +5868,26 @@
                 "type": "null"
               }
             ],
-            "title": "Owner Name"
+            "title": "Owner Name",
+            "description": "Owner of record. contractor_name null + owner_name set means no contractor was recorded -- often a homeowner who pulled the permit themselves, which is a sales lead. Caveat: on feeds that capture no contractor at all, EVERY permit looks owner-filed and the owner may be a builder, not a homeowner. Use the ?owner_filed= filter rather than inferring this yourself.",
+            "examples": [
+              "SMITH JOHN A"
+            ]
+          },
+          "owner_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Address",
+            "description": "Property-owner MAILING address. Business plan ($149/mo) and above; null on every other plan, which is a gate and not an absence of data. Joined from county assessor rolls by parcel, so coverage is bimodal -- near-complete in the jurisdictions whose roll we have loaded, absent in those we have not. Never read a null as 'this property has no owner on record'.",
+            "examples": [
+              null
+            ]
           },
           "jurisdiction_name": {
             "anyOf": [
@@ -3961,7 +5898,11 @@
                 "type": "null"
               }
             ],
-            "title": "Jurisdiction Name"
+            "title": "Jurisdiction Name",
+            "description": "The PermitStack data source this permit came from -- a city, county or statewide feed, which is not always the permit's own city.",
+            "examples": [
+              "Daytona Beach"
+            ]
           },
           "latitude": {
             "anyOf": [
@@ -3972,7 +5913,11 @@
                 "type": "null"
               }
             ],
-            "title": "Latitude"
+            "title": "Latitude",
+            "description": "WGS84 latitude. Null where the source publishes no coordinates and we could not geocode it; such permits are invisible to radius, bbox and polygon search.",
+            "examples": [
+              29.1872
+            ]
           },
           "longitude": {
             "anyOf": [
@@ -3983,7 +5928,26 @@
                 "type": "null"
               }
             ],
-            "title": "Longitude"
+            "title": "Longitude",
+            "description": "WGS84 longitude.",
+            "examples": [
+              -81.0559
+            ]
+          },
+          "location_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Source",
+            "description": "Where the coordinates came from. 'source' = published by the city with the permit record, as good as the city's own data. 'geocoded' = derived by us from the site address (TIGER, address-centroid quality), which for a structure set back from the road, such as an antenna mast, marks the property address rather than the structure. 'derived' = set by us by another method (typically a parcel-centroid join), so treat it as ours, not the city's. 'source' is judged per feed: in a feed that publishes coordinates, a minority of rows whose record lacked them may have been filled by our geocoder before 2026-09-21, when it began logging successes, and those read 'source'. Null when latitude/longitude are null.",
+            "examples": [
+              "source"
+            ]
           },
           "enrichment": {
             "anyOf": [
@@ -3993,12 +5957,17 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Structured detail parsed from the description (e.g. solar kW) where we could extract it. Null for most permits."
           },
           "record_kind": {
             "type": "string",
             "title": "Record Kind",
-            "default": "permit"
+            "description": "permit | contractor | tag | non_building | admin. Some portals mix non-permit records (contractor registrations, right-of-way, administrative) into the same feed; we store them and label them rather than counting them as permits. Search and export return record_kind='permit' only unless you ask otherwise.",
+            "default": "permit",
+            "examples": [
+              "permit"
+            ]
           },
           "date_expired": {
             "anyOf": [
@@ -4010,7 +5979,11 @@
                 "type": "null"
               }
             ],
-            "title": "Date Expired"
+            "title": "Date Expired",
+            "description": "Expiry date where published. Deliberately NOT null-checked against the future the way the other dates are -- an expiry legitimately lies ahead.",
+            "examples": [
+              "2027-02-21"
+            ]
           },
           "fee_amount": {
             "anyOf": [
@@ -4033,7 +6006,11 @@
                 "type": "null"
               }
             ],
-            "title": "Stories"
+            "title": "Stories",
+            "description": "Building stories, where published.",
+            "examples": [
+              1
+            ]
           },
           "units": {
             "anyOf": [
@@ -4044,7 +6021,11 @@
                 "type": "null"
               }
             ],
-            "title": "Units"
+            "title": "Units",
+            "description": "Dwelling/tenant units, where published.",
+            "examples": [
+              1
+            ]
           },
           "square_footage": {
             "anyOf": [
@@ -4055,7 +6036,11 @@
                 "type": "null"
               }
             ],
-            "title": "Square Footage"
+            "title": "Square Footage",
+            "description": "Project square footage, where published. Usually null.",
+            "examples": [
+              2100.0
+            ]
           },
           "applicant_name": {
             "anyOf": [
@@ -4066,7 +6051,11 @@
                 "type": "null"
               }
             ],
-            "title": "Applicant Name"
+            "title": "Applicant Name",
+            "description": "Whoever filed the application. On most feeds this is the OWNER; on a few it is the contractor, and for those tenants we map it to contractor_name instead. Never assume which one it is from this field alone.",
+            "examples": [
+              "WINDOW WORLD OF DAYTONA"
+            ]
           },
           "contractor_license": {
             "anyOf": [
@@ -4077,7 +6066,11 @@
                 "type": "null"
               }
             ],
-            "title": "Contractor License"
+            "title": "Contractor License",
+            "description": "Contractor's licence number as published or as matched against a state licence-board roster. A free public identifier; contact details remain gated to /v1/contractors/{id} on Developer+.",
+            "examples": [
+              "CBC1262595"
+            ]
           },
           "created_at": {
             "anyOf": [
@@ -4088,7 +6081,11 @@
                 "type": "null"
               }
             ],
-            "title": "Created At"
+            "title": "Created At",
+            "description": "When PermitStack first ingested this record (ISO 8601). NOT a date the city published -- use date_filed/date_issued for that.",
+            "examples": [
+              "2026-08-22T04:11:03.882174+00:00"
+            ]
           }
         },
         "type": "object",
@@ -4114,7 +6111,8 @@
           "square_footage",
           "applicant_name"
         ],
-        "title": "PermitDetail"
+        "title": "PermitDetail",
+        "description": "PermitSummary plus the nine columns that only a single-permit lookup used to carry.\nAlso returned inline by search and sync with ?fields=full (Developer and above)."
       },
       "PermitEnrichment": {
         "properties": {
@@ -4333,6 +6331,43 @@
               }
             ],
             "title": "Jurisdiction Name"
+          },
+          "contractor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contractor Id",
+            "description": "Stable id of the contractor of record, joinable to /v1/contractors/{id}. Null where the source publishes no contractor."
+          },
+          "property_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Property Type",
+            "description": "RESIDENTIAL, COMMERCIAL, MIXED_USE, ... or UNKNOWN, as on /v1/permits/search."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "The permit's scope of work as the jurisdiction published it (description_raw on search)."
           }
         },
         "type": "object",
@@ -4381,6 +6416,26 @@
             "type": "boolean",
             "title": "Total Unknown",
             "default": false
+          },
+          "hints": {
+            "items": {
+              "$ref": "#/components/schemas/Hint"
+            },
+            "type": "array",
+            "title": "Hints",
+            "default": []
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor",
+            "description": "Pass back as `cursor` to receive only events you have not seen yet, with no duplicates and no gap. Null when this page cannot define a resume point (i.e. a `page` beyond the first, where the newest row on the page is not the newest overall)."
           }
         },
         "type": "object",
@@ -4419,6 +6474,87 @@
             },
             "type": "array",
             "title": "Results"
+          },
+          "hints": {
+            "items": {
+              "$ref": "#/components/schemas/Hint"
+            },
+            "type": "array",
+            "title": "Hints",
+            "default": []
+          },
+          "coverage_confidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoverageConfidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tier_window_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier Window Days"
+          },
+          "tier_window_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier Window From"
+          },
+          "tier_window_clamped": {
+            "type": "boolean",
+            "title": "Tier Window Clamped",
+            "default": false
+          },
+          "tier_window_upgrade_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier Window Upgrade Url"
+          },
+          "locked_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Fields"
+          },
+          "locked_upgrade_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Upgrade Url"
           },
           "coverage": {
             "items": {
@@ -4468,7 +6604,11 @@
           "id": {
             "type": "string",
             "format": "uuid",
-            "title": "Id"
+            "title": "Id",
+            "description": "Stable PermitStack id. Pass to GET /v1/permits/{id}.",
+            "examples": [
+              "f4be62ed-b522-42a3-907b-b4ab4ec1a102"
+            ]
           },
           "permit_number": {
             "anyOf": [
@@ -4479,15 +6619,60 @@
                 "type": "null"
               }
             ],
-            "title": "Permit Number"
+            "title": "Permit Number",
+            "description": "The permit number as the issuing jurisdiction publishes it. Not unique across jurisdictions, and not always present.",
+            "examples": [
+              "R2608-181"
+            ]
           },
           "status": {
             "type": "string",
-            "title": "Status"
+            "enum": [
+              "FILED",
+              "ISSUED",
+              "IN_PROGRESS",
+              "FINAL",
+              "EXPIRED",
+              "CANCELLED",
+              "REVOKED",
+              "UNKNOWN",
+              "INTERCONNECTED"
+            ],
+            "title": "Status",
+            "description": "One of FILED, ISSUED, IN_PROGRESS, FINAL, EXPIRED, CANCELLED, REVOKED, INTERCONNECTED, UNKNOWN -- normalised by us from each source's own vocabulary. UNKNOWN means the source published no status, never that the permit is inactive. INTERCONNECTED comes from the California NEM solar feed.",
+            "examples": [
+              "ISSUED"
+            ]
           },
           "category": {
             "type": "string",
-            "title": "Category"
+            "enum": [
+              "NEW_CONSTRUCTION",
+              "RENOVATION",
+              "DEMOLITION",
+              "ELECTRICAL",
+              "PLUMBING",
+              "MECHANICAL",
+              "ROOFING",
+              "SOLAR",
+              "BATTERY",
+              "EV_CHARGER",
+              "HVAC",
+              "FIRE_ALARM",
+              "SIGN",
+              "FENCE",
+              "POOL",
+              "FOUNDATION",
+              "ADDITION",
+              "INTERIOR_REMODEL",
+              "GRADING",
+              "OTHER"
+            ],
+            "title": "Category",
+            "description": "Trade/work classification, UPPERCASE. One of: NEW_CONSTRUCTION, RENOVATION, DEMOLITION, ELECTRICAL, PLUMBING, MECHANICAL, ROOFING, SOLAR, BATTERY, EV_CHARGER, HVAC, FIRE_ALARM, SIGN, FENCE, POOL, FOUNDATION, ADDITION, INTERIOR_REMODEL, GRADING, OTHER. Derived by us from the permit type and description, not published by the city. NOTE when FILTERING: ?category=hvac matches HVAC *and* MECHANICAL, and ?category=mechanical does the same, because HVAC work is routinely filed as MECHANICAL -- they are one market and a bare equality would hide half of it.",
+            "examples": [
+              "ROOFING"
+            ]
           },
           "tags": {
             "anyOf": [
@@ -4501,11 +6686,21 @@
                 "type": "null"
               }
             ],
-            "title": "Tags"
+            "title": "Tags",
+            "description": "Free-form keywords extracted from the description (e.g. 'pool', 'reroof'). Additive; do not rely on a fixed vocabulary.",
+            "examples": [
+              [
+                "pool"
+              ]
+            ]
           },
           "property_type": {
             "type": "string",
-            "title": "Property Type"
+            "title": "Property Type",
+            "description": "RESIDENTIAL, COMMERCIAL, INDUSTRIAL, MIXED_USE or UNKNOWN. UNKNOWN is common -- many feeds publish nothing that implies a property type.",
+            "examples": [
+              "RESIDENTIAL"
+            ]
           },
           "address_street": {
             "anyOf": [
@@ -4516,7 +6711,11 @@
                 "type": "null"
               }
             ],
-            "title": "Address Street"
+            "title": "Address Street",
+            "description": "Street address as published. Stored verbatim, so spacing can be irregular; our address matching normalises whitespace for you.",
+            "examples": [
+              "288 Mosaic Blvd"
+            ]
           },
           "address_city": {
             "anyOf": [
@@ -4527,7 +6726,11 @@
                 "type": "null"
               }
             ],
-            "title": "Address City"
+            "title": "Address City",
+            "description": "City. Null where the feed publishes none -- notably county-wide feeds. Read null as unknown, never as 'not in a city'.",
+            "examples": [
+              "Daytona Beach"
+            ]
           },
           "address_state": {
             "anyOf": [
@@ -4538,7 +6741,11 @@
                 "type": "null"
               }
             ],
-            "title": "Address State"
+            "title": "Address State",
+            "description": "2-letter state. Null on 6.6M permits (7.3%) whose feed never populates it; those rows are still returned by ?state= searches, which admit them on independent evidence of the jurisdiction.",
+            "examples": [
+              "FL"
+            ]
           },
           "address_zip": {
             "anyOf": [
@@ -4549,7 +6756,26 @@
                 "type": "null"
               }
             ],
-            "title": "Address Zip"
+            "title": "Address Zip",
+            "description": "5-digit ZIP where published.",
+            "examples": [
+              "32124"
+            ]
+          },
+          "parcel_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parcel Id",
+            "description": "Assessor parcel number / APN exactly as the SOURCE publishes it -- formatting varies by county and is not normalised. ~41% populated estate-wide and entirely dependent on whether the source publishes one, so read a null as 'this feed does not carry a parcel', never as 'this property has none'. Filterable via ?parcel=.",
+            "examples": [
+              "521804000160"
+            ]
           },
           "description_raw": {
             "anyOf": [
@@ -4560,7 +6786,11 @@
                 "type": "null"
               }
             ],
-            "title": "Description Raw"
+            "title": "Description Raw",
+            "description": "The scope of work exactly as the jurisdiction published it. The single most useful field for lead qualification, and the input our category classifier reads.",
+            "examples": [
+              "RE-ROOF: remove existing shingles, install 39 sq architectural shingles"
+            ]
           },
           "estimated_value": {
             "anyOf": [
@@ -4571,7 +6801,11 @@
                 "type": "null"
               }
             ],
-            "title": "Estimated Value"
+            "title": "Estimated Value",
+            "description": "Declared job value in USD, as published. Frequently null and occasionally nominal -- treat 0 and 1 as 'not stated'.",
+            "examples": [
+              24500.0
+            ]
           },
           "date_filed": {
             "anyOf": [
@@ -4583,7 +6817,11 @@
                 "type": "null"
               }
             ],
-            "title": "Date Filed"
+            "title": "Date Filed",
+            "description": "Application/filing date. Null where the source publishes only an issue date.",
+            "examples": [
+              "2026-08-14"
+            ]
           },
           "date_issued": {
             "anyOf": [
@@ -4595,7 +6833,11 @@
                 "type": "null"
               }
             ],
-            "title": "Date Issued"
+            "title": "Date Issued",
+            "description": "Issue date. Null on ~25% of permits estate-wide -- whole feeds publish only a filed date -- which is why date_after/date_before filter on COALESCE(date_issued, date_filed) and issued_after does not.",
+            "examples": [
+              "2026-08-21"
+            ]
           },
           "date_completed": {
             "anyOf": [
@@ -4607,7 +6849,11 @@
                 "type": "null"
               }
             ],
-            "title": "Date Completed"
+            "title": "Date Completed",
+            "description": "Completion/final date where the source publishes one. Usually null.",
+            "examples": [
+              null
+            ]
           },
           "approval_days": {
             "anyOf": [
@@ -4642,7 +6888,24 @@
                 "type": "null"
               }
             ],
-            "title": "Contractor Name"
+            "title": "Contractor Name",
+            "description": "Contractor of record, cleaned and de-duplicated by us. Null where the feed publishes no contractor -- which is whole jurisdictions, not scattered rows: 45% of permits estate-wide carry one. A page of nulls usually means the source does not publish contractors, not that our data is missing; the `jurisdiction_coverage` block on a search response tells you which.",
+            "examples": [
+              "GLZ Industries LLC"
+            ]
+          },
+          "contractor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contractor Id",
+            "description": "Opaque id of the contractor on this permit. Pass it to GET /v1/contractors/{id} for the full record; null when the source publishes no contractor for this permit."
           },
           "owner_name": {
             "anyOf": [
@@ -4653,7 +6916,26 @@
                 "type": "null"
               }
             ],
-            "title": "Owner Name"
+            "title": "Owner Name",
+            "description": "Owner of record. contractor_name null + owner_name set means no contractor was recorded -- often a homeowner who pulled the permit themselves, which is a sales lead. Caveat: on feeds that capture no contractor at all, EVERY permit looks owner-filed and the owner may be a builder, not a homeowner. Use the ?owner_filed= filter rather than inferring this yourself.",
+            "examples": [
+              "SMITH JOHN A"
+            ]
+          },
+          "owner_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Address",
+            "description": "Property-owner MAILING address. Business plan ($149/mo) and above; null on every other plan, which is a gate and not an absence of data. Joined from county assessor rolls by parcel, so coverage is bimodal -- near-complete in the jurisdictions whose roll we have loaded, absent in those we have not. Never read a null as 'this property has no owner on record'.",
+            "examples": [
+              null
+            ]
           },
           "jurisdiction_name": {
             "anyOf": [
@@ -4664,7 +6946,11 @@
                 "type": "null"
               }
             ],
-            "title": "Jurisdiction Name"
+            "title": "Jurisdiction Name",
+            "description": "The PermitStack data source this permit came from -- a city, county or statewide feed, which is not always the permit's own city.",
+            "examples": [
+              "Daytona Beach"
+            ]
           },
           "latitude": {
             "anyOf": [
@@ -4675,7 +6961,11 @@
                 "type": "null"
               }
             ],
-            "title": "Latitude"
+            "title": "Latitude",
+            "description": "WGS84 latitude. Null where the source publishes no coordinates and we could not geocode it; such permits are invisible to radius, bbox and polygon search.",
+            "examples": [
+              29.1872
+            ]
           },
           "longitude": {
             "anyOf": [
@@ -4686,7 +6976,26 @@
                 "type": "null"
               }
             ],
-            "title": "Longitude"
+            "title": "Longitude",
+            "description": "WGS84 longitude.",
+            "examples": [
+              -81.0559
+            ]
+          },
+          "location_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Source",
+            "description": "Where the coordinates came from. 'source' = published by the city with the permit record, as good as the city's own data. 'geocoded' = derived by us from the site address (TIGER, address-centroid quality), which for a structure set back from the road, such as an antenna mast, marks the property address rather than the structure. 'derived' = set by us by another method (typically a parcel-centroid join), so treat it as ours, not the city's. 'source' is judged per feed: in a feed that publishes coordinates, a minority of rows whose record lacked them may have been filled by our geocoder before 2026-09-21, when it began logging successes, and those read 'source'. Null when latitude/longitude are null.",
+            "examples": [
+              "source"
+            ]
           },
           "enrichment": {
             "anyOf": [
@@ -4696,7 +7005,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Structured detail parsed from the description (e.g. solar kW) where we could extract it. Null for most permits."
           }
         },
         "type": "object",
@@ -4717,7 +7027,8 @@
           "date_issued",
           "date_completed"
         ],
-        "title": "PermitSummary"
+        "title": "PermitSummary",
+        "description": "One building permit."
       },
       "PropertyHistoryResponse": {
         "properties": {
@@ -4736,6 +7047,39 @@
             "type": "boolean",
             "title": "Truncated"
           },
+          "distinct_addresses": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distinct Addresses"
+          },
+          "distinct_jurisdictions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distinct Jurisdictions"
+          },
+          "fan_out_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fan Out Warning"
+          },
           "summary": {
             "$ref": "#/components/schemas/PropertySummary"
           },
@@ -4748,6 +7092,20 @@
                 "type": "null"
               }
             ]
+          },
+          "data_currency": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/JurisdictionCoverage"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Currency"
           },
           "page": {
             "type": "integer",
@@ -5191,7 +7549,7 @@
               }
             ],
             "title": "Contractor Name",
-            "description": "Fire only for permits pulled by contractors whose name contains this text (case-insensitive) \u2014 track a competitor or partner in real time."
+            "description": "Fire only for permits pulled by contractors whose name contains this text (case-insensitive) \u2014 track a competitor or partner as their new permits arrive."
           }
         },
         "type": "object",
@@ -5199,6 +7557,45 @@
           "url"
         ],
         "title": "WebhookCreate"
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "title": "ErrorDetail",
+        "properties": {
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "FeatureLocked": {
+        "type": "object",
+        "title": "FeatureLocked",
+        "properties": {
+          "detail": {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "feature_locked"
+                ]
+              },
+              "feature": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "upgrade_url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "current_tier": {
+                "type": "string"
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -5217,11 +7614,16 @@
     },
     {
       "name": "Webhooks",
-      "description": "Subscribe to real-time permit events (paid tiers)"
+      "description": "New and changed permits pushed to your endpoint about 60 seconds after we ingest them; most sources are ingested nightly. Developer plan ($79/mo) and above."
     },
     {
       "name": "Health",
       "description": "Service health checks"
+    },
+    {
+      "name": "Metrics",
+      "description": "Pre-aggregated permit counts and valuation from a nightly rollup. Use these instead of paging through search results to count them: they answer 'how many' and 'is it trending' in one millisecond-scale call. Developer plan and above."
     }
-  ]
+  ],
+  "x-speakeasy-timeout": 120000
 }

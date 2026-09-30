@@ -10,7 +10,7 @@ export class ContractorsService {
     constructor(public readonly httpRequest: BaseHttpRequest) {}
     /**
      * Search Contractors
-     * Search contractors by name, location, or specialty.
+     * Search contractors by name, location, or specialty, ranked by activity score.
      * @returns ContractorSearchResponse Successful Response
      * @throws ApiError
      */
@@ -19,7 +19,11 @@ export class ContractorsService {
         state,
         city,
         specialty,
+        licenseNumber,
+        licenseState,
         minPermits,
+        minScore,
+        sort = 'score',
         page = 1,
         perPage = 25,
     }: {
@@ -40,9 +44,25 @@ export class ContractorsService {
          */
         specialty?: (string | null),
         /**
+         * Exact state licence number, e.g. 'CBC1262595'. Matched exactly, and also tried uppercased -- so any capitalisation works for the licences stored uppercase, which is 99.96% of them. Combine with license_state when the same number is issued in more than one state.
+         */
+        licenseNumber?: (string | null),
+        /**
+         * 2-letter state that ISSUED the licence. Not the same as `state`, which is where the contractor pulls permits.
+         */
+        licenseState?: (string | null),
+        /**
          * Minimum total permits
          */
         minPermits?: (number | null),
+        /**
+         * Minimum contractor activity score (0-100)
+         */
+        minScore?: (number | null),
+        /**
+         * Sort order: 'score' (default), 'permits', or 'recent'
+         */
+        sort?: string,
         page?: number,
         perPage?: number,
     }): CancelablePromise<ContractorSearchResponse> {
@@ -54,18 +74,29 @@ export class ContractorsService {
                 'state': state,
                 'city': city,
                 'specialty': specialty,
+                'license_number': licenseNumber,
+                'license_state': licenseState,
                 'min_permits': minPermits,
+                'min_score': minScore,
+                'sort': sort,
                 'page': page,
                 'per_page': perPage,
             },
             errors: {
+                401: `Missing or invalid API key. Pass a key as the \`X-API-Key\` header.`,
                 422: `Validation Error`,
+                429: `Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.`,
             },
         });
     }
     /**
      * Get Contractor
      * Get a contractor's full profile with permit stats.
+     *
+     * `phone` and `email` are contractor contact fields gated to the Developer plan and up
+     * (see /v1/billing/plans for current pricing); on free/indie/hobbyist they return null.
+     * `name`, `license_number`, `specialties`, `city`/`state`/`address`, and the stats are
+     * available on all plans.
      * @returns ContractorProfile Successful Response
      * @throws ApiError
      */
@@ -81,7 +112,9 @@ export class ContractorsService {
                 'contractor_id': contractorId,
             },
             errors: {
+                401: `Missing or invalid API key. Pass a key as the \`X-API-Key\` header.`,
                 422: `Validation Error`,
+                429: `Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.`,
             },
         });
     }
@@ -111,7 +144,9 @@ export class ContractorsService {
                 'per_page': perPage,
             },
             errors: {
+                401: `Missing or invalid API key. Pass a key as the \`X-API-Key\` header.`,
                 422: `Validation Error`,
+                429: `Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.`,
             },
         });
     }

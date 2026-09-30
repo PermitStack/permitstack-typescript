@@ -11,4 +11,5 @@ export enum PermitStatus {
     CANCELLED = 'cancelled',
     REVOKED = 'revoked',
     UNKNOWN = 'unknown',
+    INTERCONNECTED = 'interconnected',
 }

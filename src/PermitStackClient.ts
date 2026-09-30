@@ -7,6 +7,7 @@ import type { OpenAPIConfig } from './core/OpenAPI';
 import { FetchHttpRequest } from './core/FetchHttpRequest';
 import { ContractorsService } from './services/ContractorsService';
 import { HealthService } from './services/HealthService';
+import { MetricsService } from './services/MetricsService';
 import { PermitsService } from './services/PermitsService';
 import { PropertyHistoryService } from './services/PropertyHistoryService';
 import { WebhooksService } from './services/WebhooksService';
@@ -14,6 +15,7 @@ type HttpRequestConstructor = new (config: OpenAPIConfig) => BaseHttpRequest;
 export class PermitStackClient {
     public readonly contractors: ContractorsService;
     public readonly health: HealthService;
+    public readonly metrics: MetricsService;
     public readonly permits: PermitsService;
     public readonly propertyHistory: PropertyHistoryService;
     public readonly webhooks: WebhooksService;
@@ -32,6 +34,7 @@ export class PermitStackClient {
         });
         this.contractors = new ContractorsService(this.request);
         this.health = new HealthService(this.request);
+        this.metrics = new MetricsService(this.request);
         this.permits = new PermitsService(this.request);
         this.propertyHistory = new PropertyHistoryService(this.request);
         this.webhooks = new WebhooksService(this.request);

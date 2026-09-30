@@ -13,8 +13,13 @@ export type ContractorProfile = {
     first_permit_date: (string | null);
     last_permit_date: (string | null);
     specialties: (Array<string> | null);
+    score?: (number | null);
+    is_business?: (boolean | null);
     phone: (string | null);
     email: (string | null);
+    contact_locked?: (boolean | null);
+    locked_fields?: (Array<string> | null);
+    upgrade_url?: (string | null);
     address: (string | null);
     zip_code: (string | null);
     recent_categories?: (Array<string> | null);
