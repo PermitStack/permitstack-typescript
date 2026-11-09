@@ -12,8 +12,8 @@ export class MetricsService {
      *
      * Available on the Developer plan and above (see /v1/billing/plans for current pricing).
      *
-     * Served from a nightly rollup, so it answers in milliseconds where the equivalent
-     * search-and-count takes seconds. At least one of `state` or `city` is required: an
+     * Served from a nightly rollup. Inspect `as_of` to assess its age.
+     * At least one of `state` or `city` is required: an
      * unfiltered national series would be a different (and much larger) product.
      * @returns any Successful Response
      * @throws ApiError

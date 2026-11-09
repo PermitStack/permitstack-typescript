@@ -1,6 +1,6 @@
 # permitstack-sdk
 
-Official TypeScript / JavaScript SDK for the [PermitStack](https://permit-stack.com) building‑permit API — **119M+ U.S. building permits across 8,000+ cities in 48 states and DC**, drawn from official city and county permit systems and open‑data portals (Socrata, ArcGIS, Tyler EnerGov, Accela, and more) and re‑ingested nightly for most sources.
+Official TypeScript / JavaScript SDK for the [PermitStack](https://permit-stack.com) building‑permit API — **121M+ U.S. building permits across 8,000+ cities in 48 states and DC**, drawn from official city and county permit systems and open‑data portals (Socrata, ArcGIS, Tyler EnerGov, Accela, and more) and re‑ingested nightly for most sources.
 
 ## Install
 
@@ -36,7 +36,16 @@ Your key is sent automatically as the `X-API-Key` header on every request.
 | `client.contractors` | Contractor search & profiles |
 | `client.propertyHistory` | Per‑address permit history |
 | `client.webhooks` | Register filter‑scoped webhooks (available from the Developer tier) |
+| `client.licensing` | Contractor licence lookup by number and state, licences linked to a contractor |
+| `client.certificatesOfOccupancy` | Certificate of occupancy search, detail and coverage |
+| `client.inspections` | Building inspection search, per‑permit inspection history and coverage |
+| `client.codeViolations` | Code violation and complaint search, detail and coverage |
+| `client.developmentPipeline` | Planning and zoning case search, case detail, decisions and coverage |
+| `client.metrics` | Pre‑aggregated monthly permit counts and valuation (Developer plan and above) |
+| `client.credits` | Record credit packs on sale and your credit balance |
 | `client.health` | Service health & coverage stats |
+
+The licensing, certificates, inspections, violations and pipeline datasets need a plan that includes them or the matching add‑on; see <https://permit-stack.com/#pricing>. The certificates, inspections, violations and pipeline `coverage` calls work with any API key, so you can check a place before buying.
 
 All list endpoints return a `total` (a floor — `total_capped: true` — once a result set exceeds 10,000; narrow your filters for an exact count).
 

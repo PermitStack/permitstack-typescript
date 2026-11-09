@@ -5,9 +5,11 @@
 /**
  * Boolean/scalar rollups useful for underwriting, valuation and diligence.
  *
- * Derived from permit category + tags + offline enrichment across every
- * permit matched at the address. Dates are the most-recent permit of that
- * kind (ISO yyyy-mm-dd) so you can reason about roof/solar/pool age.
+ * Derived from category, tags and enrichment on held matches within the plan's
+ * history window. Dates prefer issue, then filing, then completion date where
+ * available (ISO yyyy-mm-dd). They are permit-date proxies, not verified
+ * installation dates or current equipment condition. Missing records and
+ * classification errors can affect these signals.
  */
 export type PropertySignals = {
     has_solar?: boolean;

@@ -3,11 +3,12 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * How current one jurisdiction's data is, for the jurisdictions on THIS page of results.
+ * Recorded currency and contractor-name presence for jurisdictions on this page.
  *
- * Lets you tell "this source has not yet published the window you asked about" apart from
- * "this data is missing": `data_through` is the newest permit we hold for the jurisdiction,
- * and `with_contractor` shows how many rows on this page carry a contractor name.
+ * `data_through` is the newest relevant held permit date where measured; it may
+ * be null. A current date does not establish complete capture or explain why a
+ * particular record is missing. `with_contractor` counts records on this page
+ * with a linked contractor name, not a source-wide completeness measurement.
  */
 export type JurisdictionCoverage = {
     jurisdiction: string;

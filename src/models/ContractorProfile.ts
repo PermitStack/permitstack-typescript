@@ -20,6 +20,7 @@ export type ContractorProfile = {
     contact_locked?: (boolean | null);
     locked_fields?: (Array<string> | null);
     upgrade_url?: (string | null);
+    withheld_fields?: (Array<string> | null);
     address: (string | null);
     zip_code: (string | null);
     recent_categories?: (Array<string> | null);

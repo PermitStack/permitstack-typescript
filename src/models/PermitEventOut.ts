@@ -17,7 +17,7 @@ export type PermitEventOut = {
     category?: (string | null);
     jurisdiction_name?: (string | null);
     /**
-     * Stable id of the contractor of record, joinable to /v1/contractors/{id}. Null where the source publishes no contractor.
+     * Stable id of the contractor of record, joinable to /v1/contractors/{id}. Null means no contractor is linked to this held row; source omissions, mapping gaps or unmatched names can cause this.
      */
     contractor_id?: (string | null);
     /**

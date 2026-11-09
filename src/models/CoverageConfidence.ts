@@ -20,5 +20,8 @@ export type CoverageConfidence = {
     note: string;
     tier_window_days?: (number | null);
     tier_window_from?: (string | null);
+    capture_ratio?: (number | null);
+    capture_checked_at?: (string | null);
+    capture_note?: (string | null);
 };
 

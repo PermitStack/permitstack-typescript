@@ -25,13 +25,16 @@ export class WebhooksService {
     }
     /**
      * Create Webhook
-     * Register a webhook to be notified when new permits match your filters.
+     * Register a webhook for eligible matching records after ingestion.
      *
      * Available on the Developer plan and above (see /v1/billing/plans for current
-     * pricing). Maximum 10 webhooks per API key.
-     * When a new permit matches your filters, we'll POST the permit data as JSON to your URL.
-     * Set contractor_name to track a specific company — you'll get a POST within minutes
-     * of any permit they pull appearing in our data (competitor tracking).
+     * pricing). Maximum 10 webhooks per API key. Eligible deliveries are JSON POSTs.
+     * Set contractor_name to filter by recorded names. Source coverage and missing
+     * names affect matches; a match does not establish completed work or a customer.
+     * The dispatcher is scheduled every 60 seconds. Matching windows, backlog,
+     * retries and endpoint availability affect delivery; there is no fixed arrival
+     * deadline or guarantee that every matching source record will be delivered.
+     * Check source data-through dates separately from ingestion and dispatch cadence.
      * @returns any Successful Response
      * @throws ApiError
      */
@@ -109,6 +112,7 @@ export class WebhooksService {
             },
             errors: {
                 401: `Missing or invalid API key. Pass a key as the \`X-API-Key\` header.`,
+                403: `Your plan does not include this endpoint, or an option you passed. The body is machine-readable: \`error\` is \`feature_locked\`, \`feature\` names the gate, \`upgrade_url\` links to the cheapest plan that unlocks it, and \`current_tier\` is the plan you are on.`,
                 422: `Validation Error`,
                 429: `Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.`,
             },

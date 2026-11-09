@@ -30,6 +30,8 @@ export class PermitsService {
      * 400 rather than ignored, so a typo can never silently return unfiltered results.
      *
      * Free-tier keys are limited to a recent window; paid tiers have full history.
+     *
+     * Record credits: when there is no active plan entitlement, one credit is charged per returned record, with a one-credit minimum for successful empty data responses. Property responses count their permits. CSV sizing previews cost 0 credits and share the per-key 60/minute request budget. Credit accounts cannot receive owner or contractor contact fields. An empty or expired wallet returns 402 with a pack URL before the data query. Concurrent requests for the same wallet can return 409; retry after one second. A final JSON page may overdraw once; the next purchase first covers that debt. CSV downloads are capped at the remaining credit balance.
      * @returns PermitSearchResponse Successful Response
      * @throws ApiError
      */
@@ -65,6 +67,7 @@ export class PermitsService {
         hasEnrichment,
         scope,
         q,
+        permitNumber,
         contractorName,
         ownerFiled,
         hasOwnerAddress,
@@ -95,7 +98,7 @@ export class PermitsService {
          */
         jurisdiction?: (string | null),
         /**
-         * Street address, partial + case-insensitive (e.g. '1600 Pennsylvania') — indexed, fast
+         * Street address, partial + case-insensitive (e.g. '1600 Pennsylvania')  -  indexed, fast
          */
         address?: (string | null),
         /**
@@ -111,7 +114,7 @@ export class PermitsService {
          */
         radiusMiles?: number,
         /**
-         * 'summary' (default) or 'full'. With 'full' each result is a PermitDetail rather than a PermitSummary -- the same nine extra columns GET /v1/permits/{id} returns (record_kind, date_expired, fee_amount, stories, units, square_footage, applicant_name, contractor_license, created_at) -- so you do not fetch them one permit at a time. See the PermitDetail schema for their types; the declared response schema here is PermitSummary, which is the default shape. Developer plan and above.
+         * 'summary' (default) or 'full'. With 'full' each result is a PermitDetail rather than a PermitSummary -- the same nine extra columns GET /v1/permits/{id} returns (record_kind, date_expired, fee_amount, stories, units, square_footage, applicant_name, contractor_license, created_at) -- so you do not fetch them one permit at a time. See the PermitDetail schema for their types; the declared response schema here is PermitSummary, which is the default shape. Developer plan and above, or record credits without owner data.
          */
         fields?: string,
         /**
@@ -123,7 +126,7 @@ export class PermitsService {
          */
         polygon?: (string | null),
         /**
-         * Permit category (e.g. solar, SOLAR, roofing, hvac — case insensitive)
+         * Permit category (e.g. solar, SOLAR, roofing, hvac  -  case insensitive)
          */
         category?: (string | null),
         /**
@@ -139,7 +142,7 @@ export class PermitsService {
          */
         tag?: (string | null),
         /**
-         * Record kind: 'permit' (default, building permits only), 'contractor', 'tag', 'non_building', 'admin', or 'all'
+         * Record kind: 'permit' (default, building permits only), 'contractor', 'tag', 'non_building', 'admin', 'program' (incentive-program records counted through another dataset, e.g. NYSERDA NY-Sun), or 'all'
          */
         recordKind?: string,
         /**
@@ -159,7 +162,7 @@ export class PermitsService {
          */
         issuedBefore?: (string | null),
         /**
-         * On or after this date, matched against whichever date a record has (issued, else filed). Use this when a source populates only one of issued/filed — e.g. issued-only feeds vs filed-only feeds.
+         * On or after this date, matched against whichever date a record has (issued, else filed). Use this when a source populates only one of issued/filed  -  e.g. issued-only feeds vs filed-only feeds.
          */
         dateAfter?: (string | null),
         /**
@@ -203,11 +206,15 @@ export class PermitsService {
          */
         q?: (string | null),
         /**
+         * Exact permit number as the issuing jurisdiction assigned it, case-insensitive (surrounding spaces ignored). Narrower and much faster than q= for a known number. The same number can exist in more than one jurisdiction, so add city or state to tell them apart.
+         */
+        permitNumber?: (string | null),
+        /**
          * Contractor name (partial match)
          */
         contractorName?: (string | null),
         /**
-         * true = owner-filed permits only (no contractor on record but an owner name is present — often a DIY/homeowner lead, though for feeds that don't capture contractors the owner may be a builder or institution); false = permits that have a contractor
+         * true selects records with no linked contractor and a recorded owner name, using source contractor coverage checks; false selects records with a linked contractor. This filter does not verify who filed, homeowner status or purchase intent.
          */
         ownerFiled?: (boolean | null),
         /**
@@ -289,6 +296,7 @@ export class PermitsService {
                 'has_enrichment': hasEnrichment,
                 'scope': scope,
                 'q': q,
+                'permit_number': permitNumber,
                 'contractor_name': contractorName,
                 'owner_filed': ownerFiled,
                 'has_owner_address': hasOwnerAddress,
@@ -304,7 +312,9 @@ export class PermitsService {
             },
             errors: {
                 401: `Missing or invalid API key. Pass a key as the \`X-API-Key\` header.`,
+                402: `Record credits empty or expired`,
                 403: `Your plan does not include this endpoint, or an option you passed. The body is machine-readable: \`error\` is \`feature_locked\`, \`feature\` names the gate, \`upgrade_url\` links to the cheapest plan that unlocks it, and \`current_tier\` is the plan you are on.`,
+                409: `Wallet busy, or CSV count/cost changed`,
                 422: `Validation Error`,
                 429: `Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.`,
             },
@@ -312,11 +322,19 @@ export class PermitsService {
     }
     /**
      * Export Permits
-     * Export permits matching filters as CSV. Tier-gated row limits.
-     * @returns string Successful Response
+     * Export permits matching the same API filters as CSV. Plan row limits or available
+     * credits cap the download. Use preview=true for the exact bounded record count and credit
+     * cost, then expected_rows and expected_credit_cost to confirm them before downloading.
+     *
+     * Record credits: when there is no active plan entitlement, one credit is charged per returned record, with a one-credit minimum for successful empty data responses. Property responses count their permits. CSV sizing previews cost 0 credits and share the per-key 60/minute request budget. Credit accounts cannot receive owner or contractor contact fields. An empty or expired wallet returns 402 with a pack URL before the data query. Concurrent requests for the same wallet can return 409; retry after one second. A final JSON page may overdraw once; the next purchase first covers that debt. CSV downloads are capped at the remaining credit balance.
+     * @returns any Successful Response
      * @throws ApiError
      */
     public exportPermits({
+        preview = false,
+        expectedPreviewCreditCost,
+        expectedRows,
+        expectedCreditCost,
         zipCode,
         city,
         state,
@@ -350,6 +368,22 @@ export class PermitsService {
         startDate,
         endDate,
     }: {
+        /**
+         * Count this bounded export without returning records. Preview pricing is reported by /v1/credits/balance; credit_cost quotes the subsequent download.
+         */
+        preview?: boolean,
+        /**
+         * Refuse sizing if its own credit cost changed since balance was read.
+         */
+        expectedPreviewCreditCost?: (number | null),
+        /**
+         * Refuse download if the count changed since preview.
+         */
+        expectedRows?: (number | null),
+        /**
+         * Refuse download if the credit cost changed since preview.
+         */
+        expectedCreditCost?: (number | null),
         zipCode?: (string | null),
         city?: (string | null),
         state?: (string | null),
@@ -384,7 +418,7 @@ export class PermitsService {
         q?: (string | null),
         contractorName?: (string | null),
         /**
-         * true = owner-filed permits only (no contractor on record, owner name present — often DIY/homeowner leads, though for feeds without contractor capture the owner may be a builder/institution); false = permits that have a contractor
+         * true selects records with no linked contractor and a recorded owner name, using source contractor coverage checks; false selects records with a linked contractor. This filter does not verify who filed, homeowner status or purchase intent.
          */
         ownerFiled?: (boolean | null),
         /**
@@ -420,11 +454,23 @@ export class PermitsService {
          * @deprecated
          */
         endDate?: (string | null),
-    }): CancelablePromise<string> {
+    }): CancelablePromise<{
+        record_count: number;
+        limit: number;
+        credit_cost: number;
+        truncated: boolean;
+        preview_credit_cost: number;
+        available_credits: (number | null);
+        download_available: boolean;
+    }> {
         return this.httpRequest.request({
             method: 'GET',
             url: '/v1/permits/export',
             query: {
+                'preview': preview,
+                'expected_preview_credit_cost': expectedPreviewCreditCost,
+                'expected_rows': expectedRows,
+                'expected_credit_cost': expectedCreditCost,
                 'zip_code': zipCode,
                 'city': city,
                 'state': state,
@@ -460,7 +506,9 @@ export class PermitsService {
             },
             errors: {
                 401: `Missing or invalid API key. Pass a key as the \`X-API-Key\` header.`,
+                402: `Record credits empty or expired`,
                 403: `Your plan does not include this endpoint, or an option you passed. The body is machine-readable: \`error\` is \`feature_locked\`, \`feature\` names the gate, \`upgrade_url\` links to the cheapest plan that unlocks it, and \`current_tier\` is the plan you are on.`,
+                409: `Wallet busy, or CSV count/cost changed`,
                 422: `Validation Error`,
                 429: `Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.`,
             },
@@ -470,8 +518,20 @@ export class PermitsService {
      * Sync Permits
      * Incremental data feed (change-data-capture). Page the dataset ordered by
      * (updated_at, id). Omit `cursor` for the initial full load; persist `next_cursor` and pass
-     * it back after each nightly ingest to receive only new + changed permits. Upsert-only
-     * (deletes are not emitted).
+     * it back after each nightly ingest to receive only new + changed permits. Upsert-only:
+     * permits we delete (duplicate copies removed in cleanups) are listed separately by
+     * GET /v1/permits/sync/deletions, which pages the same way.
+     *
+     * **Keeping a mirror exact.** Upsert every record from this feed, and drop every
+     * `permit_id` that GET /v1/permits/sync/deletions returns when called with the SAME
+     * `record_kind`, `state` and `category` you pass here. A permit can leave a filtered
+     * feed without being deleted -- re-classified (roofing -> hvac), re-located to another
+     * state, re-labelled as a non-building record, or its source switched off -- and the
+     * deletions feed then lists it for every filter it no longer matches, and never for one
+     * it still matches. A permit that moves INTO your filter arrives here with a new
+     * `updated_at`. Membership changes are recorded from 2026-10-25; category and state moves
+     * before that date were not, so a mirror built with `category=` or `state=` before then
+     * should re-pull once (or sync unfiltered with `record_kind=all` and filter locally).
      * @returns any A page of permits in (updated_at, id) order. Keep `next_cursor` and pass it back as `cursor` to resume; `has_more` is false once you are caught up. Each record in `results` has the /v1/permits/search fields (fields=summary) plus the extras listed under `fields=full`. Page size is `limit`, up to 50,000.
      * @throws ApiError
      */
@@ -534,6 +594,91 @@ export class PermitsService {
         });
     }
     /**
+     * Sync Deletions
+     * Permits to drop from a mirror built with /v1/permits/sync.
+     *
+     * /v1/permits/sync is upsert-only, so a permit we delete (almost always a duplicate copy of a
+     * permit that still exists under another id) would otherwise live on in a mirror and 404 on
+     * /v1/permits/{id}. Drop every `permit_id` listed here. Same cursor contract as /sync: omit
+     * `cursor` (or pass `since`) to start, then pass back `next_cursor`. When the deleted copy's
+     * permit still exists under another id, `replaced_by` names it. Every delete is recorded by a
+     * database trigger, so this list covers all deletions from 2026-09-24 on, whatever removed them.
+     *
+     * **Call it with the same `record_kind`, `state` and `category` as your /v1/permits/sync
+     * calls.** It also lists permits that LEFT that feed without being deleted (`kind =
+     * "left_feed"`, the permit still exists): we stopped serving the source
+     * (`reason = "jurisdiction_deactivated"`), it was re-labelled as a non-building
+     * record (`left_permit_set:<kind>`, or `record_kind_changed:<kind>` for a
+     * record that was not a permit), or -- from 2026-10-25 -- it was re-classified or moved to
+     * another state or source (`category_changed:OLD->NEW`,
+     * `state_changed:OLD->NEW`, `jurisdiction_changed`; for a move,
+     * `jurisdiction_id` is the source it LEFT and `moved_to_jurisdiction_id` the one it joined).
+     * `reason` names the latest change, except that a re-label or a stopped source still in
+     * force keeps its reason through later changes. Each entry is judged against the permit as it is
+     * NOW: one that still matches your filters is never listed for you, and one that comes back
+     * is re-sent by /v1/permits/sync with a new `updated_at`.
+     *
+     * A page holds at most `limit` results. To reach them it examines records past ones that do
+     * not concern you (up to 250,000 per page), so after a large
+     * re-classification a page can still hold fewer than `limit` results, even none, while
+     * `has_more` is true. Keep paging until `has_more` is false; `next_cursor` always advances
+     * past everything examined.
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public syncDeletions({
+        cursor,
+        since,
+        limit = 5000,
+        recordKind = 'permit',
+        state,
+        category,
+    }: {
+        /**
+         * Opaque cursor from the previous response's `next_cursor`.
+         */
+        cursor?: (string | null),
+        /**
+         * ISO-8601 UTC timestamp; returns deletions with deleted_at >= since. Ignored when `cursor` is supplied. Omit both to page every recorded deletion.
+         */
+        since?: (string | null),
+        /**
+         * Max results per page (up to 50,000). A page can return fewer -- even none -- and still have `has_more`: keep paging while `has_more` is true.
+         */
+        limit?: number,
+        /**
+         * Pass the same value you pass to /v1/permits/sync: 'permit' (default), a specific record_kind, or 'all'. A permit re-labelled as a non-building record is listed for record_kind=permit and not for record_kind=all, where it is still in the feed.
+         */
+        recordKind?: string,
+        /**
+         * Pass the same 2-letter state you pass to /v1/permits/sync. Lists permits that left that state's feed, including ones whose own address_state differs from their jurisdiction's.
+         */
+        state?: (string | null),
+        /**
+         * Pass the same category you pass to /v1/permits/sync. Lists permits re-classified out of it (e.g. roofing -> hvac) as well as deletions.
+         */
+        category?: (string | null),
+    }): CancelablePromise<any> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/v1/permits/sync/deletions',
+            query: {
+                'cursor': cursor,
+                'since': since,
+                'limit': limit,
+                'record_kind': recordKind,
+                'state': state,
+                'category': category,
+            },
+            errors: {
+                401: `Missing or invalid API key. Pass a key as the \`X-API-Key\` header.`,
+                403: `Your plan does not include this endpoint, or an option you passed. The body is machine-readable: \`error\` is \`feature_locked\`, \`feature\` names the gate, \`upgrade_url\` links to the cheapest plan that unlocks it, and \`current_tier\` is the plan you are on.`,
+                422: `Validation Error`,
+                429: `Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.`,
+            },
+        });
+    }
+    /**
      * List Permit Events
      * What CHANGED, instead of re-reading everything: permit transitions
      * (new_permit, status_change, issued, completed, expired) built from the daily
@@ -585,6 +730,8 @@ export class PermitsService {
      * Ingest runs once a day, so a daily poll is enough; `detected_at` is when WE saw
      * the change, not when the city recorded it. For push instead of poll, register a
      * webhook (developer tier and above) and skip the polling entirely.
+     *
+     * Record credits: when there is no active plan entitlement, one credit is charged per returned record, with a one-credit minimum for successful empty data responses. Property responses count their permits. CSV sizing previews cost 0 credits and share the per-key 60/minute request budget. Credit accounts cannot receive owner or contractor contact fields. An empty or expired wallet returns 402 with a pack URL before the data query. Concurrent requests for the same wallet can return 409; retry after one second. A final JSON page may overdraw once; the next purchase first covers that debt. CSV downloads are capped at the remaining credit balance.
      * @returns PermitEventsResponse Successful Response
      * @throws ApiError
      */
@@ -659,6 +806,8 @@ export class PermitsService {
             },
             errors: {
                 401: `Missing or invalid API key. Pass a key as the \`X-API-Key\` header.`,
+                402: `Record credits empty or expired`,
+                409: `Wallet busy, or CSV count/cost changed`,
                 422: `Validation Error`,
                 429: `Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.`,
             },
@@ -667,6 +816,8 @@ export class PermitsService {
     /**
      * Get Permit
      * Get full details for a single permit.
+     *
+     * Record credits: when there is no active plan entitlement, one credit is charged per returned record, with a one-credit minimum for successful empty data responses. Property responses count their permits. CSV sizing previews cost 0 credits and share the per-key 60/minute request budget. Credit accounts cannot receive owner or contractor contact fields. An empty or expired wallet returns 402 with a pack URL before the data query. Concurrent requests for the same wallet can return 409; retry after one second. A final JSON page may overdraw once; the next purchase first covers that debt. CSV downloads are capped at the remaining credit balance.
      * @returns PermitDetail Successful Response
      * @throws ApiError
      */
@@ -683,6 +834,8 @@ export class PermitsService {
             },
             errors: {
                 401: `Missing or invalid API key. Pass a key as the \`X-API-Key\` header.`,
+                402: `Record credits empty or expired`,
+                409: `Wallet busy, or CSV count/cost changed`,
                 422: `Validation Error`,
                 429: `Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.`,
             },
@@ -690,7 +843,9 @@ export class PermitsService {
     }
     /**
      * Get Permits By Address
-     * Get all permits for a specific address (partial match).
+     * Search a page of held permit records using a partial address match. Results depend on source coverage, address matching, pagination and plan history limits. A match can include multiple properties; an empty result does not prove that no permit or work exists.
+     *
+     * Record credits: when there is no active plan entitlement, one credit is charged per returned record, with a one-credit minimum for successful empty data responses. Property responses count their permits. CSV sizing previews cost 0 credits and share the per-key 60/minute request budget. Credit accounts cannot receive owner or contractor contact fields. An empty or expired wallet returns 402 with a pack URL before the data query. Concurrent requests for the same wallet can return 409; retry after one second. A final JSON page may overdraw once; the next purchase first covers that debt. CSV downloads are capped at the remaining credit balance.
      * @returns PermitSearchResponse Successful Response
      * @throws ApiError
      */
@@ -721,6 +876,8 @@ export class PermitsService {
             },
             errors: {
                 401: `Missing or invalid API key. Pass a key as the \`X-API-Key\` header.`,
+                402: `Record credits empty or expired`,
+                409: `Wallet busy, or CSV count/cost changed`,
                 422: `Validation Error`,
                 429: `Rate limit exceeded -- either the per-minute burst or the daily cap for your plan. Retry after the window resets; the daily cap resets at UTC midnight.`,
             },
@@ -730,7 +887,7 @@ export class PermitsService {
      * Get Coverage Stats
      * Coverage statistics: total permits, every jurisdiction we hold, and the counties they fall in.
      *
-     * Each jurisdiction carries `data_through` (the newest permit we actually hold, measured),
+     * Each jurisdiction carries nullable `data_through` (the newest held permit date where measured),
      * plus `county` / `county_fips` (the county most of its permits fall in) and `counties`
      * (the full measured mix with a `share` of the sample per county, since some cities straddle
      * a county line). `counties` at the top level is the same data keyed by county, listing the
@@ -767,9 +924,15 @@ export class PermitsService {
     }
     /**
      * System Age
-     * Addresses whose LATEST permit in the trade is min–max years old with nothing
-     * since — the system is statistically due for replacement. Only trades with a real
-     * lifecycle are supported (roofing, hvac, mechanical, solar=repower, pool).
+     * Search held permit records by trade and permit age. The date basis is issue
+     * date, falling back to filing date. The query selects the newest matching held
+     * record at a recorded address within the selected age range, with no newer
+     * matching record found. Supported trades: roofing, hvac, mechanical, solar and pool.
+     *
+     * Results are paginated and depend on source coverage, classification and address
+     * matching. A missing newer record does not establish that no later work occurred.
+     * These dates do not verify installation, equipment age or replacement needs.
+     * Review work scope, completion evidence and current condition separately.
      * @returns PermitSearchResponse Successful Response
      * @throws ApiError
      */
@@ -839,8 +1002,14 @@ export class PermitsService {
     }
     /**
      * Battery Retrofit Candidates
-     * Solar permits aged between min/max years whose address has NO battery permit
-     * on file — the storage-retrofit lead list. Requires a location filter.
+     * Search held solar permit records in the selected permit-age range with no
+     * matching battery-tagged permit found at the same recorded address. Dates use
+     * issue date, falling back to filing date. Requires a location filter; results
+     * are paginated and depend on source coverage, classification and address matching.
+     *
+     * An absent match does not establish that a property lacks a battery. Permit
+     * dates do not verify installation or current equipment. Review scope,
+     * completion and equipment suitability before assessing retrofit needs.
      * @returns PermitSearchResponse Successful Response
      * @throws ApiError
      */
@@ -904,9 +1073,15 @@ export class PermitsService {
     }
     /**
      * Reroof Due
-     * Roofing permits aged min-max years whose address has NO newer roofing permit —
-     * homes whose roof is statistically due for replacement. Alias of
-     * /v1/plays/system-age?trade=roofing (kept as the discoverable roofing-first name).
+     * Search held roofing permit records in the selected permit-age range, with
+     * no newer matching roofing record found at the same recorded address. Dates use
+     * issue date, falling back to filing date. Results are paginated and depend on
+     * source coverage, classification and address matching.
+     *
+     * A roofing record can describe a repair or proposed work. Its age does not
+     * establish roof age or predict replacement, and missing records do not prove
+     * that no later work occurred. Review scope, completion and current condition.
+     * Alias of /v1/plays/system-age?trade=roofing.
      * @returns PermitSearchResponse Successful Response
      * @throws ApiError
      */
@@ -970,8 +1145,13 @@ export class PermitsService {
     }
     /**
      * Orphan Recovery
-     * PV permits whose installer (contractor, applicant, or owner) matches `installer`
-     * in a territory — a named competitor's customer base. Requires a location filter.
+     * Search held solar permit records using a case-insensitive substring match
+     * in recorded contractor, applicant or owner fields. Requires a location filter;
+     * results are paginated and depend on source coverage and available names.
+     *
+     * A name match does not verify the installer, a customer relationship, completed
+     * installation or current service needs. Review identity, project scope,
+     * completion and current equipment before using a result as a prospect.
      * @returns PermitSearchResponse Successful Response
      * @throws ApiError
      */
@@ -1029,11 +1209,17 @@ export class PermitsService {
     }
     /**
      * List Covered Jurisdictions
-     * Every jurisdiction we cover, with how current and how complete each one is.
+     * Covered jurisdictions with measured currency and source-capture labels where available.
      *
-     * `data_through` is the newest permit we actually hold, measured -- not when we last
-     * polled the source. `freshness_label` and `completeness_label` are the same sentences the
-     * export picker and the delivered manifest use, so this can never disagree with them.
+     * `data_through` is the newest held permit date where measured, not a poll time.
+     * Dates and capture estimates may be unknown; a current date does not establish
+     * complete capture. `freshness_label` and `completeness_label` use the shared
+     * definitions also used by the export picker and delivered manifest.
+     *
+     * `last_refreshed` is the UTC date we last finished reading the source, whether or not it
+     * had anything new: a refresh date, never a currency claim (that is `data_through`).
+     * `previous_names` lists the names the same jurisdiction `id` was published under before,
+     * oldest first, each with the date it stopped being used. The id never changes on a rename.
      * @returns any Successful Response
      * @throws ApiError
      */
